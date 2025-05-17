@@ -590,8 +590,12 @@
   let gameMode = "normal";   // ゲームモード: normal or distraction
 
   // 丸の再表示用
-  let currentShapeData = []; // 今の問題の図形データ
+  let currentShapeData = []; // 今の問題の丸データ
+  let currentAllShapeData = []; // 今の問題の全図形データ（お邪魔マークを含む）
   let currentCircleCount = 0; // 今の問題の丸の数
+  
+  // 前回の丸の数を記録（連続して同じ数にならないようにするため）
+  let previousCircleCount = 0;
 
   // 難易度別マップ (秒数は含めない)
   const difficultyMap = {
@@ -642,6 +646,7 @@
     currentQuestion = 0;
     correctCount = 0;
     consecutiveCorrect = 0;
+    previousCircleCount = 0; // 前回の丸の数をリセット
     showScreen("screen-game");
     nextQuestion();
   }
@@ -691,6 +696,7 @@
     // フラグ初期化
     questionMissed = false;
     currentShapeData = [];
+    currentAllShapeData = [];
     currentCircleCount = 0;
 
     // カウントダウン表示 → 丸表示
@@ -724,9 +730,16 @@
   ********************************************/
   function showShapes() {
     const container = document.getElementById("circle-container");
-    // ランダムな丸の数を決定
-    const circleCount = getRandomInt(circleMin, circleMax);
+    
+    // 前回と異なるランダムな丸の数を決定
+    let circleCount;
+    do {
+      circleCount = getRandomInt(circleMin, circleMax);
+    } while (circleCount === previousCircleCount && (circleMax - circleMin) > 0);
+    
+    // 今回の丸の数を記録
     currentCircleCount = circleCount;
+    previousCircleCount = circleCount;
     
     // 配置データを作成
     const parentW = container.clientWidth;
@@ -746,6 +759,7 @@
       }
       
       shapes.push(shapeObj);
+      currentShapeData.push(shapeObj); // 丸のデータを保存
     }
     
     // チャレンジモードの場合、お邪魔マークを追加
@@ -769,6 +783,9 @@
       }
     }
     
+    // 全図形データを保存
+    currentAllShapeData = [...shapes];
+    
     // DOMに図形を追加
     shapes.forEach(shape => {
       const shapeDiv = document.createElement("div");
@@ -781,11 +798,6 @@
       shapeDiv.style.top = shape.y + "px";
       
       container.appendChild(shapeDiv);
-      
-      // 丸のみを保存（再表示用）
-      if (shape.type === "circle") {
-        currentShapeData.push(shape);
-      }
     });
     
     // 一定時間後に消し、選択肢を表示
@@ -843,9 +855,9 @@
    * もういちどボタン: 同じ問題を再表示
   ********************************************/
   function helpReShowCircles() {
-    if (currentShapeData.length === 0 || currentCircleCount === 0) return;
+    if (currentAllShapeData.length === 0 || currentCircleCount === 0) return;
 
-    // 再度カウントダウン → 同じ丸を表示
+    // 再度カウントダウン → 同じ図形を表示
     const container = document.getElementById("circle-container");
     container.innerHTML = `
       <div id="countdown"></div>
@@ -856,17 +868,17 @@
     document.getElementById("feedback").className = "";
 
     showCountdown(() => {
-      // 同じ丸を再度表示
-      currentShapeData.forEach(data => {
-        const circleDiv = document.createElement("div");
-        circleDiv.classList.add("shape");
-        circleDiv.classList.add("circle");
-        circleDiv.style.width = data.size + "px";
-        circleDiv.style.height = data.size + "px";
-        circleDiv.style.backgroundColor = data.color;
-        circleDiv.style.left = data.x + "px";
-        circleDiv.style.top = data.y + "px";
-        container.appendChild(circleDiv);
+      // 全ての図形を再度表示（お邪魔マークを含む）
+      currentAllShapeData.forEach(data => {
+        const shapeDiv = document.createElement("div");
+        shapeDiv.classList.add("shape");
+        shapeDiv.classList.add(data.type);
+        shapeDiv.style.width = data.size + "px";
+        shapeDiv.style.height = data.size + "px";
+        shapeDiv.style.backgroundColor = data.color;
+        shapeDiv.style.left = data.x + "px";
+        shapeDiv.style.top = data.y + "px";
+        container.appendChild(shapeDiv);
       });
 
       // 一定時間後に消して選択肢再表示
@@ -1134,8 +1146,8 @@
   }
 
   // 正解+ランダム4つ (合計5択) を生成
-  function generateChoices(correct) {
-    const choices = [correct];
+  function generateChoices(correctAnswer) {
+    const choices = [correctAnswer];
     // 必ず異なる値を4つ追加
     while (choices.length < 5) {
       let rnd = getRandomInt(Math.max(1, circleMin - 2), circleMax + 2);
